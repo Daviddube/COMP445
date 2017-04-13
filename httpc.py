@@ -3,24 +3,32 @@ import argparse
 import sys
 
 def httpc(method, URL, header, verbose, inline, file, o):
-    
-    host = URL.split('/')[0]
+    if URL.split('/')[0] == 'http:' or URL.split('/')[0] == 'https:':
+        host = URL.split('/')[2]
+    else:
+        host = URL.split('/')[0]
 
-    conn = socket.create_connection((host, 80))
+    conn = socket.create_connection((host, 8080))
     
     try:
         path = ''
         if len(URL.split('/')) > 1:
             count = 0
             for i in URL.split('/'):
+                if count >= len(URL.split('/')):
+                    break
+                if URL.split('/')[count] == 'https:' or URL.split('/')[count] == 'http:':
+                    count += 3
+                    continue
                 if count != 0:
                     path += '/' + URL.split('/')[count]
                 count += 1
         if method == 'get':
-            line = 'GET ' + path + ' HTTP/1.0\nHost: ' + host + '\n\n'
+            line = 'GET ' + path + ' HTTP/1.0\nHost: ' + host + '\n'
             if header:
                 for i in header:
                     line += i + '\n'
+            line += '\n'
         elif method == 'post':
             line = 'POST ' + path + ' HTTP/1.0\nHost: ' + host + '\n'
             if header:
@@ -44,18 +52,18 @@ def httpc(method, URL, header, verbose, inline, file, o):
         request = line.encode("utf-8")
         conn.sendall(request)
         # MSG_WAITALL waits for full request or error
-        response = conn.recv(1000, socket.MSG_WAITALL)
+        response = conn.recv(1000)
         if o is not None:
             with open(o, "a+") as f:
                 if verbose:
                     f.write(response.decode("utf-8"))
                 else:
-                    f.write(response.decode("utf-8").split("\r\n\r\n")[1])
+                    f.write(response.decode("utf-8").split("\n\n")[1])
         else:
             if verbose:
-                sys.stdout.write("Replied: " + response.decode("utf-8"))
+                sys.stdout.write(response.decode("utf-8"))
             else:
-                sys.stdout.write("Replied: " + response.decode("utf-8").split("\r\n\r\n")[1])
+                sys.stdout.write(response.decode("utf-8").split("\n\n")[1])
 
     finally:
         conn.close()
