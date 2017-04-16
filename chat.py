@@ -33,26 +33,45 @@ def client(user_name, serverName, serverPort):
 
     while True:
         user_message = read_text_from_user_input('')
-        user_command = 'TALK'
-        if(user_message == '/leave'):
-            user_command = "LEAVE"
-        if(user_message == '/who'):
-            user_command = "WHO"
-        application_message = build_message(user_message, user_command, user_name)
-        clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        clientSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        if(user_command == "WHO"):
-            clientSocket.sendto(application_message.encode('ascii'), (serverName, serverPort))
-        else:
-            clientSocket.sendto(application_message.encode('ascii'), ('255.255.255.255', serverPort))
-        clientSocket.close()
-        if(user_command == "LEAVE"):
-            user_command = "QUIT"
-            application_message = build_message(user_message, user_command, user_name)
+        if(user_message.split(' ')[0] == "/private"):
+            user_command = "PRIVATE-TALK"
+            user_name_private = user_message.split(' ')[1]
+            user_message = ''
+            application_message = build_message(user_message, user_command, user_name_private)
             clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             clientSocket.sendto(application_message.encode('ascii'), (serverName, serverPort))
+            privateAddress, serverAddress = clientSocket.recvfrom(2048)
+            privateAddress = privateAddress.decode('utf-8')
+            if(privateAddress == 'Name not found'):
+                print(user_name_private + " is not currently logged in")
+            else:
+                user_message = read_text_from_user_input('Private message to ' + user_name_private + ': ')
+                user_command = "TALK"
+                application_message = build_message(user_message, user_command, user_name_private + " (PRIVATE)")
+                clientSocket.sendto(application_message.encode('ascii'), (privateAddress, serverPort))
+
             clientSocket.close()
-            exit(0)
+        else:
+            user_command = 'TALK'
+            if(user_message == '/leave'):
+                user_command = "LEAVE"
+            if(user_message == '/who'):
+                user_command = "WHO"
+            application_message = build_message(user_message, user_command, user_name)
+            clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            clientSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            if(user_command == "WHO"):
+                clientSocket.sendto(application_message.encode('ascii'), (serverName, serverPort))
+            else:
+                clientSocket.sendto(application_message.encode('ascii'), ('255.255.255.255', serverPort))
+            clientSocket.close()
+            if(user_command == "LEAVE"):
+                user_command = "QUIT"
+                application_message = build_message(user_message, user_command, user_name)
+                clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                clientSocket.sendto(application_message.encode('ascii'), (serverName, serverPort))
+                clientSocket.close()
+                exit(0)
         
 
 def server(serverName, serverPort):
@@ -65,30 +84,35 @@ def server(serverName, serverPort):
         timestamp = datetime.datetime.now()
         if(user_command == "JOIN"):
             user_command = "PING"
-            users.append(user_name)
+            users.append((user_name, address[0]))
             print(str(timestamp) + ' ' + user_name + ' joined!')
-            user_name = users[0]
+            user_name = (users[0][0], address[0])
             if(address[0] != socket.gethostbyname(socket.gethostname())):
-                application_message = build_message(user_message, user_command, user_name)
+                application_message = build_message(user_message, user_command, user_name[0])
                 clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 clientSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                print(address)
                 clientSocket.sendto(application_message.encode('ascii'), (address[0], serverPort))
                 clientSocket.close()
         elif(user_command == "TALK"):
-            print(str(timestamp) + ' [' + user_name + ']: ' + user_message)
+            if(len(user_name.split(' ')) == 2):
+                print(str(timestamp) + ' [' + user_name.split(' ')[0] + '] ' + user_name.split(' ')[1] + ': ' + user_message)
+            else:
+                print(str(timestamp) + ' [' + user_name + ']: ' + user_message)
         elif(user_command == "LEAVE"):
-            print(users)
-            users.remove(user_name)
+            users.remove((user_name, address[0]))
             print(str(timestamp) + ' ' + user_name + ' left!')
         elif(user_command == "WHO"):
-            print("Connected users: " + str(users))
+            print("Connected users: " + str([x[0] for x in users]))
         elif(user_command == "QUIT"):
             print("Bye now!")
             exit(0)
         elif(user_command == "PING"):
-            print('username: ' + user_name)
-            users.append(user_name)
+            users.append((user_name, address[0]))
+        elif(user_command == "PRIVATE-TALK"):
+            for x in users:
+                if x[0] == user_name:
+                    serverSocket.sendto(x[1].encode('ascii'), address)
+            serverSocket.sendto('Name not found'.encode('ascii'), address)
         #else:
             #do nothing
 chat()
